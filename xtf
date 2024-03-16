@@ -1,0 +1,350 @@
+#!/bin/bash
+
+list_flag=false
+list_currency_flag=false
+status_flag=false
+profit_flag=false
+: ${XTF_PROFIT:=20}
+export XTF_PROFIT
+
+if [[ -z "$XTF_PROFIT" ]];then
+    echo "chuj"
+    XTF_PROFIT="20"
+fi
+
+after="0000-01-01 00:00:00" # Lowest possible date
+before="9999-12-31 23:59:59" # Highest possible date
+currency=""
+
+help_printer(){
+        echo "PŘÍKAZ může být jeden z:
+list – výpis záznamů pro daného uživatele.
+list-currency – výpis seřazeného seznamu vyskytujících se měn.
+status – výpis skutečného stavu účtu seskupeného a seřazeného dle jednotlivých měn.
+profit – výpis stavu účtu zákazníka se započítaným fiktivním výnosem.
+FILTR může být kombinace následujících:
+-a DATETIME – after: jsou uvažovány pouze záznamy PO tomto datu a čase (bez něj). DATETIME je formátu YYYY-MM-DD HH:MM:SS.
+-b DATETIME – before: jsou uvažovány pouze záznamy PŘED tímto datem a časem (bez něj).
+-c CURRENCY – jsou uvažovány pouze záznamy odpovídající dané měně.
+-h a --help vypíšou nápovědu s krátkým popisem každého příkazu a přepínače."
+}
+
+ARGS=( "$@" )
+# Initialize an empty array to store logs
+logs=()
+currencies=()
+i=0
+flag_count=0
+a_count=0
+b_count=0
+
+check_daytime_input() {
+    local datetime="$1"
+    local regex='^[0-9]{4}-[0-1][0-9]-[0-3][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9]$'
+
+    if [[ $datetime =~ $regex ]]; then
+        return 0 # True, the string matches the format
+    else
+        return 1 # False, the string does not match the format
+    fi
+}
+data_check() {
+    # Adjust the position of fi to correctly close the if-elif block before piping to awk
+    if [[ "${1: -4}" == ".log" ]]; then
+        cat "$1"
+    elif [[ "${1: -7}" == ".log.gz" ]]; then
+        gunzip -c "$1"
+    else
+        # Consider adding an else branch to handle unsupported file formats.
+        echo "Unsupported file format" >&2
+        return 1 # Exit the function with an error status if the file format is unsupported.
+    fi | awk -F';' '
+    # Function to check if the datetime is correctly formatted
+    function is_datetime_valid(datetime) {
+        return datetime ~ /^[0-9]{4}-[0-1][0-9]-[0-3][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9]$/;
+    }
+
+    # Function to check if a string is not empty
+    function is_not_empty(string) {
+        return string != "";
+    }
+
+    BEGIN {
+        valid = 1; # Assume all data is valid at the start
+    }
+
+    {
+        # Check if any field is missing or if datetime format is incorrect
+        if (NF != 4 || !is_not_empty($1) || !is_datetime_valid($2) || !is_not_empty($3) || !is_not_empty($4)) {
+            valid = 0; # Mark as invalid if any check fails
+            exit 1; # Exit on first error
+        }
+    }
+
+    END {
+        exit !valid;
+    }'
+    return $? # Return the exit status of the awk command
+}
+
+while [ $i -lt ${#ARGS[@]} ]; do
+    case "${ARGS[i]}" in
+        '') # Skip if element is empty
+            ;;
+        -h|--help)
+            help_printer
+            ;;
+        list)
+            list_flag=true
+            ((flag_count+=1))
+            ;;
+        list-currency)
+            list_currency_flag=true
+            ((flag_count+=1))
+            ;;
+        status)
+            ((flag_count+=1))
+            status_flag=true
+            ;;
+        profit)
+            ((flag_count+=1))
+            status_flag=true
+            profit_flag=true
+            ;;
+        -a)
+            ((a_count+=1))
+            after="${ARGS[i+1]}"
+            if ! check_daytime_input "$after"; then
+                exit 1
+            fi
+            ((i++)) # Skip the next argument as it is processed with -a
+            ;;
+        -b)
+            ((b_count+=1))
+            before="${ARGS[i+1]}"
+            if ! check_daytime_input "$after"; then
+                exit 1
+            fi
+            ((i++)) # Skip the next argument as it is processed with -b
+            ;;
+        -c)
+            currencies+=("${ARGS[i+1]}")
+            if ! check_daytime_input "$after"; then
+                exit 1
+            fi
+            ((i++)) # Skip the next argument as it is processed with -c
+            ;;
+        *)
+            # Check if the argument is a log file or a trader name
+            if [[ "${ARGS[i]: -4}" == ".log" ]] || [[ "${ARGS[i]: -3}" == ".gz" ]]; then
+                if data_check "${ARGS[i]}"; then
+                    logs+=("${ARGS[i]}") # Append file to logs array
+                fi
+            else
+                trader="${ARGS[i]}" # Assume it's a trader name
+            fi
+            ;;
+    esac
+    ((i++)) # Increment loop counter to move to the next argument
+done
+
+# echo "$list_currency_flag a $trader"
+# for i in "${logs[@]}"; do
+#     echo "$i"
+# done
+if [[ "$list_flag" == false && "$list_currency_flag" == false && "$status_flag" == false && "$currency" = "" ]]; then
+    list_flag=true
+fi
+
+# Decide what to do with collected traders. For example, print them
+# for curr in "${currencies[@]}"; do
+#     echo "Log found:: $curr"
+# done
+# Function to read file line by line and append strings to the global array
+# data_filter(){
+#     local after="$1"
+#     local before="$2"
+#     local currency="$3"
+#     local line="$4"
+#     echo "${line[]}"
+#     # if [[ "$currency" == "" ]] || [[ "$currency" == "${line[2]}" ]]; then
+#     #     if [[ "${line[1]}" -lt "$after" ]] && [[ "${line[1]}" -gt "$before" ]]; then
+#     #         echo "$line"
+#     #     fi
+#     # fi
+# }
+# listing_logs(){
+#     local filename="$1"
+#     local trader="$2"
+#     declare -a data_array=()  # Use declare -a to explicitly declare an array
+
+#     while IFS= read -r line; do
+#         IFS=';' read -ra ADDR <<< "$line"  # Split line into an array based on ';'
+
+#         # Condition for adding lines to data_array based on various flags
+#         if [ "$trader" == "${ADDR[0]}" ]; then
+#             data_filter "$3" "$4" "$5" "$line"
+#         fi
+#     done < "$filename"
+
+#     # Print the data_array content
+#     for i in "${data_array[@]}"; do
+#         echo "$i"
+#     done
+# }
+# # read_file_to_array() {
+# #     local filename="$1"
+# #     local trader="$2"
+# #     declare -a data_array=()  # Use declare -a to explicitly declare an array
+
+# #     while IFS= read -r line; do
+# #         IFS=';' read -ra ADDR <<< "$line"  # Split line into an array based on ';'
+
+# #         # Condition for adding lines to data_array based on various flags
+# #         if [[ "$list_flag" == true ]] ||
+# #            [[ -n "$currency" ]] ||
+# #            [[ "$status_flag" == true ]] ||
+# #            [[ "$profit_flag" == true ]] ||
+# #            [[ -n "$after" ]] ||
+# #            [[ -n "$before" ]]; then
+# #                 if
+# #            echo "${line[2]}"
+# #             data_array+=("${line}")  # Append the whole line or specific fields as needed
+# #         fi
+# #         #&& "$after" > "${ADDR[1]}" && "$trader" == "${ADDR[0]}" 
+
+# #         # Condition for printing currency directly
+# #         if [[ "$list_currency_flag" == true && "$trader" == "${ADDR[0]}" ]]; then
+# #             echo "${ADDR[2]}"
+# #         fi
+
+# #         # Placeholder for status_flag condition
+# #         # if [[ "$status_flag" == true ]]; then
+# #         #     # Add logic here
+# #         # fi
+
+# #         # Placeholder for profit_flag condition
+# #         # if [[ "$profit_flag" == true ]]; then
+# #         #     # Add logic here
+# #         # fi
+# #     done < "$filename"
+
+# #     # Print the data_array content
+# #     for i in "${data_array[@]}"; do
+# #         echo "$i"
+# #     done
+# # }
+
+
+list_func() {
+    if [ -n "$trader" ]; then
+        local currency_str="${currencies[*]}"
+        for log in "$@"; do
+            if [[ "${log: -4}" == ".log" ]]; then
+                cat "$log"
+            elif [[ "${log: -7}" == ".log.gz" ]]; then
+                gunzip -c "$log"
+            else
+                echo "Unsupported file format: $log" >&2
+            fi
+        done | awk -v trader="$trader" -v currencyStr="$currency_str" -v after="$after" -v before="$before" -F';' '
+        BEGIN {
+            split(currencyStr, currencyArr, " ")
+            for (i in currencyArr) {
+                currencyMap[currencyArr[i]]
+            }
+        }
+        {   
+            if ($1 == ""){
+                exit;
+            }
+            if ($1 == trader && (($3 in currencyMap) || currencyStr == "") && $2 > after && $2 < before) print $0
+        }'
+    fi
+}
+
+list_curencies(){
+    if [ -n "$trader" ]; then
+        local currency_str="${currencies[*]}"
+        for log in "$@"; do
+            if [[ "${log: -4}" == ".log" ]]; then
+                cat "$log"
+            elif [[ "${log: -7}" == ".log.gz" ]]; then
+                gunzip -c "$log"
+            else
+                echo "Unsupported file format: $log" >&2
+            fi
+        done | awk -v trader="$trader" -v currencyStr="$currency_str" -v after="$after" -v before="$before" -F';' '
+        BEGIN {
+            split(currencyStr, currencyArr, " ")
+            for (i in currencyArr) {
+                currencyMap[currencyArr[i]]
+            }
+        }
+        {
+            if ($1 == trader && (($3 in currencyMap) || currencyStr == "") && $2 > after && $2 < before) print $3
+        }' | sort | uniq
+    fi
+}
+status_func() {
+    if [ -n "$trader" ]; then
+        local currency_str="${currencies[*]}"
+        # Prepare to read from both uncompressed and compressed logs
+        for log in "$@"; do
+            if [[ "${log: -4}" == ".log" ]]; then
+                cat "$log"
+            elif [[ "${log: -7}" == ".log.gz" ]]; then
+                gunzip -c "$log"
+            # else
+            #     echo "Unsupported file format: $log" >&2
+            fi
+        done | awk -v profit="$profit_koef" -v trader="$trader" -v currency="$currency_str" -v after="$after" -v before="$before" -F';' '
+        BEGIN {
+            # Split currencyStr into an array, using comma as delimiter
+            split(currencyStr, currencyArr, " ")
+            for (i in currencyArr) {
+                currencyMap[currencyArr[i]]
+            }
+        }
+        {
+            if ($2 !~ /^[0-9]{4}-[0-1][0-9]-[0-3][0-9] [0-2][0-9]:[0-5][0-9]:[0-5][0-9]$/) {
+                exit;
+            }
+
+            if ((trader == "" || $1 == trader) &&
+                (currency == "" || $3 == currency) &&
+                $2 > after && $2 < before) {
+                    balance[$3] += $4
+                }
+        }
+        END {
+            for (curr in balance) {
+                adjusted_balance = balance[curr] > 0 ? balance[curr] * profit : balance[curr]
+                printf "%s : %.4f\n", curr, adjusted_balance
+            }
+        }' | sort
+    fi
+}
+
+# # Call the function with the filename
+# listing_logs "${logs[0]}" "$trader" "$after" "$before" "$currency"
+if [[ "$flag_count" -lt 2 ]] && [[ "$a_count" -lt 2 ]] && [[ "$b_count" -lt 2 ]]; then
+    if [[ $list_flag = true ]]; then
+        list_func "${logs[@]}"
+    fi
+
+    if [[ $list_currency_flag == true ]]; then
+        list_curencies "${logs[@]}"
+    fi
+
+    if [[ $status_flag == true ]]; then
+        profit_koef="1"
+        if [[ "$profit_flag" == true ]];then
+            profit_koef=$(echo "scale=4; $XTF_PROFIT * 0.01 + 1" | bc)
+        fi
+        status_func "${logs[@]}"
+    fi
+fi
+unset XTF_PROFIT
+
+
