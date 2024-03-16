@@ -8,7 +8,6 @@ profit_flag=false
 export XTF_PROFIT
 
 if [[ -z "$XTF_PROFIT" ]];then
-    echo "chuj"
     XTF_PROFIT="20"
 fi
 
@@ -17,7 +16,7 @@ before="9999-12-31 23:59:59" # Highest possible date
 currency=""
 
 help_printer(){
-        echo "PŘÍKAZ může být jeden z:
+        printf "%s\n" "PŘÍKAZ může být jeden z:
 list – výpis záznamů pro daného uživatele.
 list-currency – výpis seřazeného seznamu vyskytujících se měn.
 status – výpis skutečného stavu účtu seskupeného a seřazeného dle jednotlivých měn.
@@ -56,7 +55,7 @@ data_check() {
         gunzip -c "$1"
     else
         # Consider adding an else branch to handle unsupported file formats.
-        echo "Unsupported file format" >&2
+        printf "%s\n" "Unsupported file format" >&2
         return 1 # Exit the function with an error status if the file format is unsupported.
     fi | awk -F';' '
     # Function to check if the datetime is correctly formatted
@@ -245,7 +244,7 @@ list_func() {
             elif [[ "${log: -7}" == ".log.gz" ]]; then
                 gunzip -c "$log"
             else
-                echo "Unsupported file format: $log" >&2
+                printf "%s\n" "Unsupported file format: $log" >&2
             fi
         done | awk -v trader="$trader" -v currencyStr="$currency_str" -v after="$after" -v before="$before" -F';' '
         BEGIN {
@@ -272,7 +271,7 @@ list_curencies(){
             elif [[ "${log: -7}" == ".log.gz" ]]; then
                 gunzip -c "$log"
             else
-                echo "Unsupported file format: $log" >&2
+                printf "%s\n" "Unsupported file format: $log" >&2
             fi
         done | awk -v trader="$trader" -v currencyStr="$currency_str" -v after="$after" -v before="$before" -F';' '
         BEGIN {
@@ -340,7 +339,7 @@ if [[ "$flag_count" -lt 2 ]] && [[ "$a_count" -lt 2 ]] && [[ "$b_count" -lt 2 ]]
     if [[ $status_flag == true ]]; then
         profit_koef="1"
         if [[ "$profit_flag" == true ]];then
-            profit_koef=$(echo "scale=4; $XTF_PROFIT * 0.01 + 1" | bc)
+            profit_koef=$(printf "%s\n" "scale=4; $XTF_PROFIT * 0.01 + 1" | bc)
         fi
         status_func "${logs[@]}"
     fi
