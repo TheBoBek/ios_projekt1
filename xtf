@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export POSIXLY_CORRECT=yes
+export LC_ALL=C
 # Initialization of flags
 list_flag=false
 list_currency_flag=false
@@ -35,90 +37,84 @@ FILTR může být kombinace následujících:
 
 # Function prints log for specified user 
 list_func() {
-    # Check if trader variable is empty 
-    if [ -n "$trader" ]; then
-        for log in "$@"; do # Iterates through logs
-            if [[ "${log: -4}" == ".log" ]]; then # Check if log
-                cat "$log" # Opens the file for further pipe
-            else # Check if zipped
-                gunzip -c "$log" # Unzipps the file for further pipe
-            fi
-        # Pipe to awk segment
-        done | awk -v trader="$trader" -v currenciesStr="$currencies" -v after="$after" -v before="$before" -F';' '
-        BEGIN {
-            split(currenciesStr, currencyArr, " ") # Split the string to array of keys for map
-            # Iterates through the array and assign true value to cpecified key
-            for (i in currencyArr) {
-                isCurrencyInArray[currencyArr[i]] = 1; # Create map (dict) and sets key values to 1
-            }
+    for log in "$@"; do # Iterates through logs
+        if [[ "${log: -4}" == ".log" ]]; then # Check if log
+            cat "$log" # Opens the file for further pipe
+        else # Check if zipped
+            gunzip -c "$log" # Unzipps the file for further pipe
+        fi
+    # Pipe to awk segment
+    done | awk -v trader="$trader" -v currenciesStr="$currencies" -v after="$after" -v before="$before" -F';' '
+    BEGIN {
+        split(currenciesStr, currencyArr, " ") # Split the string to array of keys for map
+        # Iterates through the array and assign true value to cpecified key
+        for (i in currencyArr) {
+            isCurrencyInArray[currencyArr[i]] = 1; # Create map (dict) and sets key values to 1
         }
-        {   
-            # Check if conditions are met and print the line
-            if ($1 == trader && (($3 in isCurrencyInArray) || currenciesStr == "") && $2 > after && $2 < before) print $0
-        }'
-    fi
+    }
+    {   
+        # Check if conditions are met and print the line
+        if ($1 == trader && (($3 in isCurrencyInArray) || currenciesStr == "") && $2 > after && $2 < before) print $0
+    }'
 }
 
 # Function print sorted log of currencies
 list_curencies(){
-    # Check if trader variable is empty 
-    if [ -n "$trader" ]; then # Iterates through logs
-        for log in "$@"; do
-            if [[ "${log: -4}" == ".log" ]]; then # Check if log
-                cat "$log" # Opens the file for further pipe
-            else # Check if zipped
-                gunzip -c "$log" # Unzipps the file for further pipe
-            fi
-        done | awk -v trader="$trader" -v currenciesStr="$currencies" -v after="$after" -v before="$before" -F';' '
-        BEGIN {
-            split(currenciesStr, currencyArr, " ") # Split the string to array of keys for map
-            # Iterates through the array and assign true value to cpecified key
-            for (i in currencyArr) {
-                isCurrencyInArray[currencyArr[i]] = 1; # Create map (dict) and sets key values to 1
-            }
+    for log in "$@"; do # Iterates through logs
+        if [[ "${log: -4}" == ".log" ]]; then # Check if log
+            cat "$log" # Opens the file for further pipe
+        else # Check if zipped
+            gunzip -c "$log" # Unzipps the file for further pipe
+        fi
+    # Pipe to awk segment
+    done | awk -v trader="$trader" -v currenciesStr="$currencies" -v after="$after" -v before="$before" -F';' '
+    BEGIN {
+        split(currenciesStr, currencyArr, " ") # Split the string to array of keys for map
+        # Iterates through the array and assign true value to cpecified key
+        for (i in currencyArr) {
+            isCurrencyInArray[currencyArr[i]] = 1; # Create map (dict) and sets key values to 1
         }
-        {               
-            # Check if conditions are met and print the currency
-            if ($1 == trader && (($3 in isCurrencyInArray) || currenciesStr == "") && $2 > after && $2 < before) print $3
-        }' | sort | uniq # Sort and remove duplicates
-    fi
+    }
+    {               
+        # Check if conditions are met and print the currency
+        if ($1 == trader && (($3 in isCurrencyInArray) || currenciesStr == "") && $2 > after && $2 < before) print $3
+    }' | sort | uniq # Sort and remove duplicates
 }
 
 # Function print log of (real or fictive) balances (for each crpytoCur) for specified user
 status_func() {
-    if [ -n "$trader" ]; then
-         for log in "$@"; do # Iterates through logs
-            if [[ "${log: -4}" == ".log" ]]; then # Check if log
-                cat "$log" # Opens the file for further pipe
-            else # Check if zipped
-                gunzip -c "$log" # Unzipps the file for further pipe
-            fi
-        done | awk -v profit="$profit_koef" -v trader="$trader" -v currenciesStr="$currencies" -v after="$after" -v before="$before" -F';' '
-        BEGIN {
-            # Split currenciesStr into an array, using comma as delimiter
-            split(currenciesStr, currencyArr, " ")
-            for (i in currencyArr) {
-                isCurrencyInArray[currencyArr[i]] = 1;
-            }
-        }
-        {
-            if ($1 == trader && (($3 in isCurrencyInArray) || currenciesStr == "") && $2 > after && $2 < before) {
-                    balance[$3] += $4 # Create map with with keys as currency codes and values as balances
-            }
-        }
-        END {
-            # Iterate through the map and modify balances
-            for (curr in balance) {
-                if (balance[curr] > 0) {
-                    adjustedBalance = balance[curr] * profit;
-                }
-                else {
-                    adjustedBalance = balance[curr];
-                }
-                printf "%s : %.4f\n", curr, adjustedBalance
-            }
-        }' | sort
+    for log in "$@"; do # Iterates through logs
+    if [[ "${log: -4}" == ".log" ]]; then # Check if log
+        cat "$log" # Opens the file for further pipe
+    else # Check if zipped
+        gunzip -c "$log" # Unzipps the file for further pipe
     fi
+    # Pipe to awk segment   
+    done | awk -v profit="$profit_koef" -v trader="$trader" -v currenciesStr="$currencies" -v after="$after" -v before="$before" -F';' '
+    BEGIN {
+        # Split currenciesStr into an array, using comma as delimiter
+        split(currenciesStr, currencyArr, " ")
+        for (i in currencyArr) {
+            isCurrencyInArray[currencyArr[i]] = 1;
+        }
+    }
+    {
+        if ($1 == trader && (($3 in isCurrencyInArray) || currenciesStr == "") && $2 > after && $2 < before) {
+                balance[$3] += $4 # Create map with with keys as currency codes and values as balances
+        }
+    }
+    END {
+        # Iterate through the map and modify balances
+        for (curr in balance) {
+            if (balance[curr] > 0) {
+                adjustedBalance = balance[curr] * profit;
+            }
+            else {
+                adjustedBalance = balance[curr];
+            }
+            printf "%s : %.4f\n", curr, adjustedBalance
+        }
+    }' | sort
 }
 
 # Function checks if daytime data from input arguments are valid
@@ -152,7 +148,7 @@ data_check() {
         }
     }
 
-    # Function to check if a string is not empty
+    # Function check if a string is not empty
     function is_not_empty(string) {
         if (string != "") {
             return 1;
@@ -215,6 +211,8 @@ while [ $i -lt ${#ARGS[@]} ]; do
             ((a_count+=1))
             after="${ARGS[i+1]}" # Save variable containing date data to variable
             if ! check_daytime_input "$after"; then # Check for invalid input
+                unset XTF_PRFIT
+                echo "Invalid daytime argument" >&2
                 exit 1
             fi
             ((i++)) # Skip the next argument
@@ -223,6 +221,8 @@ while [ $i -lt ${#ARGS[@]} ]; do
             ((b_count+=1))
             before="${ARGS[i+1]}" # Save variable containing date data to variable
             if ! check_daytime_input "$after"; then # Check for invalid input
+                unset XTF_PRFIT
+                echo "Invalid daytime argument" >&2
                 exit 1
             fi
             ((i++)) # Skip the next argument
@@ -240,7 +240,12 @@ while [ $i -lt ${#ARGS[@]} ]; do
             if [[ "${ARGS[i]: -4}" == ".log" ]] || [[ "${ARGS[i]: -3}" == ".gz" ]]; then
                 if data_check "${ARGS[i]}"; then
                     logs+=("${ARGS[i]}") # Append found log to array
+                else
+                    unset XTF_PRFIT
+                    echo "Invalid data." >&2
+                    exit 1;
                 fi
+
             else
                 trader="${ARGS[i]}" # Save trader name
             fi
@@ -253,7 +258,11 @@ done
 if [[ "$list_flag" == false && "$list_currency_flag" == false && "$status_flag" == false && "$currency" = "" ]]; then
     list_flag=true
 fi
-
+if [[ -z "$trader" ]]; then
+    unset XTF_PRFIT
+    echo "No trader given." >&2
+    exit 1
+fi
 # Checks if flag counts are valid -> (less than 2)
 if [[ "$flag_count" -lt 2 ]] && [[ "$a_count" -lt 2 ]] && [[ "$b_count" -lt 2 ]]; then
     # Based on settled flags, will run the function needed
